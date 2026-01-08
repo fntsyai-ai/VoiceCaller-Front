@@ -45,7 +45,35 @@ function App() {
     })
 
     socketRef.current.on('ai-response', (data) => {
-      setTranscript(prev => [...prev, { type: 'ai', text: data.text }])
+      if (data.complete) {
+        // Final complete response - replace the accumulated partial
+        setTranscript(prev => {
+          const filtered = prev.filter(item => !item.isPartial)
+          return [...filtered, { type: 'ai', text: data.text }]
+        })
+      } else if (data.partial) {
+        // Partial response - accumulate
+        setTranscript(prev => {
+          // Find if we already have a partial AI response
+          const lastItem = prev[prev.length - 1]
+          if (lastItem && lastItem.type === 'ai' && lastItem.isPartial) {
+            // Append to existing partial
+            const updated = [...prev]
+            updated[updated.length - 1] = {
+              type: 'ai',
+              text: lastItem.text + ' ' + data.text,
+              isPartial: true
+            }
+            return updated
+          } else {
+            // First partial response
+            return [...prev, { type: 'ai', text: data.text, isPartial: true }]
+          }
+        })
+      } else {
+        // Legacy non-streaming response
+        setTranscript(prev => [...prev, { type: 'ai', text: data.text }])
+      }
     })
 
     socketRef.current.on('audio-response', (audioData) => {
@@ -200,7 +228,7 @@ function App() {
             <h3 className="transcript-title">Conversation</h3>
             <div className="transcript-messages">
               {transcript.map((msg, idx) => (
-                <div key={idx} className={`message ${msg.type}`}>
+                <div key={idx} className={`message ${msg.type} ${msg.isPartial ? 'partial' : ''}`}>
                   <span className="message-label">{msg.type === 'user' ? 'You' : 'AI'}:</span>
                   <span className="message-text">{msg.text}</span>
                 </div>

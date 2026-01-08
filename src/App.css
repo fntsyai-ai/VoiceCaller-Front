@@ -204,6 +204,27 @@
   border: 2px solid #667eea30;
   align-self: flex-end;
   margin-left: auto;
+  position: relative;
+}
+
+.message.ai.partial::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: #667eea;
+  animation: blink 1.4s infinite;
+}
+
+@keyframes blink {
+  0%, 50%, 100% {
+    opacity: 1;
+  }
+  25%, 75% {
+    opacity: 0.3;
+  }
 }
 
 .message-label {
