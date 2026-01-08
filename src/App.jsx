@@ -18,8 +18,13 @@ function App() {
   const isPlayingRef = useRef(false)
 
   useEffect(() => {
-    // Connect to server
-    socketRef.current = io(SERVER_URL)
+    // Connect to server with proper CORS configuration
+    socketRef.current = io(SERVER_URL, {
+      withCredentials: true,
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    })
 
     socketRef.current.on('connect', () => {
       setIsConnected(true)
