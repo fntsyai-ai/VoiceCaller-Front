@@ -16,6 +16,7 @@ function App() {
   const audioContextRef = useRef(null)
   const audioQueueRef = useRef([])
   const isPlayingRef = useRef(false)
+  const currentAudioSourceRef = useRef(null)
 
   useEffect(() => {
     // Connect to server with proper CORS configuration
@@ -147,6 +148,16 @@ function App() {
   }
 
   const stopAudioPlayback = () => {
+    // Stop currently playing audio source immediately
+    if (currentAudioSourceRef.current) {
+      try {
+        currentAudioSourceRef.current.stop()
+        currentAudioSourceRef.current = null
+      } catch (e) {
+        // Source might already be stopped
+      }
+    }
+
     // Clear audio queue
     audioQueueRef.current = []
     isPlayingRef.current = false
@@ -195,7 +206,13 @@ function App() {
           source.buffer = decodedAudio
           source.connect(audioContextRef.current.destination)
 
-          source.onended = resolve
+          // Store reference so we can stop it during barge-in
+          currentAudioSourceRef.current = source
+
+          source.onended = () => {
+            currentAudioSourceRef.current = null
+            resolve()
+          }
           source.onerror = reject
 
           source.start(0)
