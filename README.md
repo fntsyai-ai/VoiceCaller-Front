@@ -44,7 +44,7 @@ VITE_SERVER_URL=http://localhost:3001
 For production, use your Railway backend URL:
 
 ```env
-VITE_SERVER_URL=https://your-backend.railway.app
+VITE_SERVER_URL=https://voiceagent-backend-production-b679.up.railway.app
 ```
 
 ### 3. Run Development Server

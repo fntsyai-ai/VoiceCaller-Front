@@ -44,9 +44,10 @@ function App() {
       setTranscript(prev => [...prev, { type: 'user', text: data.text }])
     })
 
+    // Handle AI responses (streaming with partial support)
     socketRef.current.on('ai-response', (data) => {
       if (data.complete) {
-        // Final complete response - replace the accumulated partial
+        // Final complete response - replace accumulated partial
         setTranscript(prev => {
           const filtered = prev.filter(item => !item.isPartial)
           return [...filtered, { type: 'ai', text: data.text }]
@@ -54,30 +55,33 @@ function App() {
       } else if (data.partial) {
         // Partial response - accumulate
         setTranscript(prev => {
-          // Find if we already have a partial AI response
           const lastItem = prev[prev.length - 1]
           if (lastItem && lastItem.type === 'ai' && lastItem.isPartial) {
             // Append to existing partial
-            const updated = [...prev]
-            updated[updated.length - 1] = {
-              type: 'ai',
-              text: lastItem.text + ' ' + data.text,
-              isPartial: true
-            }
-            return updated
+            return [
+              ...prev.slice(0, -1),
+              { type: 'ai', text: lastItem.text + ' ' + data.text, isPartial: true }
+            ]
           } else {
-            // First partial response
+            // First partial
             return [...prev, { type: 'ai', text: data.text, isPartial: true }]
           }
         })
       } else {
-        // Legacy non-streaming response
+        // Non-streaming response (fallback)
         setTranscript(prev => [...prev, { type: 'ai', text: data.text }])
       }
     })
 
+    // Handle audio streaming
     socketRef.current.on('audio-response', (audioData) => {
       playAudioResponse(audioData)
+    })
+
+    // Handle barge-in (user interrupts AI)
+    socketRef.current.on('barge-in', () => {
+      console.log('🛑 Barge-in detected - stopping audio')
+      stopAudioPlayback()
     })
 
     socketRef.current.on('error', (error) => {
@@ -142,25 +146,65 @@ function App() {
     setIsSpeaking(false)
   }
 
+  const stopAudioPlayback = () => {
+    // Clear audio queue
+    audioQueueRef.current = []
+    isPlayingRef.current = false
+
+    // Stop current audio context
+    if (audioContextRef.current && audioContextRef.current.state === 'running') {
+      audioContextRef.current.close().then(() => {
+        // Recreate audio context for next playback
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
+      })
+    }
+
+    setIsSpeaking(false)
+  }
+
   const playAudioResponse = async (audioData) => {
     try {
-      setIsSpeaking(true)
+      // Add to queue
+      audioQueueRef.current.push(audioData)
 
-      // Convert base64 to audio buffer
-      const audioBuffer = base64ToArrayBuffer(audioData)
-      const decodedAudio = await audioContextRef.current.decodeAudioData(audioBuffer)
-
-      const source = audioContextRef.current.createBufferSource()
-      source.buffer = decodedAudio
-      source.connect(audioContextRef.current.destination)
-
-      source.onended = () => {
-        setIsSpeaking(false)
+      // Start processing queue if not already playing
+      if (!isPlayingRef.current) {
+        processAudioQueue()
       }
+    } catch (error) {
+      console.error('Error queueing audio:', error)
+    }
+  }
 
-      source.start(0)
+  const processAudioQueue = async () => {
+    if (isPlayingRef.current) return
+    isPlayingRef.current = true
+    setIsSpeaking(true)
+
+    try {
+      while (audioQueueRef.current.length > 0) {
+        const audioData = audioQueueRef.current.shift()
+
+        // Convert base64 to audio buffer
+        const audioBuffer = base64ToArrayBuffer(audioData)
+        const decodedAudio = await audioContextRef.current.decodeAudioData(audioBuffer)
+
+        // Play audio and wait for it to finish
+        await new Promise((resolve, reject) => {
+          const source = audioContextRef.current.createBufferSource()
+          source.buffer = decodedAudio
+          source.connect(audioContextRef.current.destination)
+
+          source.onended = resolve
+          source.onerror = reject
+
+          source.start(0)
+        })
+      }
     } catch (error) {
       console.error('Error playing audio:', error)
+    } finally {
+      isPlayingRef.current = false
       setIsSpeaking(false)
     }
   }
