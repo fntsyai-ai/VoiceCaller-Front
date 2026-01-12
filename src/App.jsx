@@ -293,7 +293,7 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
               </svg>
             </button>
-            <button className="cta-secondary">View Architecture</button>
+            <a href="#architecture" className="cta-secondary">View Architecture</a>
           </div>
         </div>
 
