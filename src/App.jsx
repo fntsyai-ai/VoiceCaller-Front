@@ -93,31 +93,67 @@ function App() {
 
   const startCall = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      console.log('🎤 Requesting microphone access...')
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000
+        }
+      })
+
+      console.log('✅ Microphone access granted')
       setIsCallActive(true)
       setStatus('Call started - AI is listening...')
       setTranscript([])
 
       audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm'
-      })
+      // Try to use the best available codec
+      let mimeType = 'audio/webm'
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus'
+        } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+          mimeType = 'audio/ogg;codecs=opus'
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4'
+        } else {
+          console.warn('⚠️ Using default codec, audio/webm not supported')
+          mimeType = '' // Use browser default
+        }
+      }
 
+      console.log('🎵 Using audio format:', mimeType || 'default')
+
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {})
       mediaRecorderRef.current = mediaRecorder
 
+      let chunkCount = 0
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0 && socketRef.current) {
+          chunkCount++
+          if (chunkCount === 1) {
+            console.log('📤 Started sending audio chunks to server')
+          }
           socketRef.current.emit('audio-stream', event.data)
         }
       }
 
+      mediaRecorder.onerror = (event) => {
+        console.error('❌ MediaRecorder error:', event.error)
+        setStatus('Error: Recording failed')
+      }
+
+      console.log('▶️ Starting MediaRecorder...')
       mediaRecorder.start(250)
+
+      console.log('📡 Emitting call-start event...')
       socketRef.current.emit('call-start')
 
     } catch (error) {
-      console.error('Error starting call:', error)
-      setStatus('Error: Could not access microphone')
+      console.error('❌ Error starting call:', error)
+      setStatus('Error: Could not access microphone - ' + error.message)
     }
   }
 
